@@ -20,15 +20,18 @@ from __future__ import print_function, absolute_import
 from nine import range
 
 import warnings
+import importlib
 
 from pcraster.operations import ifthen, boolean, defined, lookupscalar
 import numpy as np
+import pandas as pd
 
 from ..global_modules.settings import LisSettings, MaskInfo
 from ..global_modules.add1 import loadmap, compressArray, decompress, makenumpy
 from ..global_modules.errors import LisfloodWarning
 from . import HydroModule
 
+Excel_settings_file = "cwatm_settings_reservoirs_morava2.xlsx"
 
 class reservoir(HydroModule):
 
@@ -45,6 +48,34 @@ class reservoir(HydroModule):
 
     def __init__(self, reservoir_variable):
         self.var = reservoir_variable
+
+    def reservoir_releases(self,xl_settings_file_path):
+        pd = importlib.import_module ("pandas", package=None)
+        df = pd.read_excel(xl_settings_file_path, sheet_name= 'Reservoirs_downstream')
+        waterBodyID_C_tolist = self.var.waterBodyID_C.tolist() #WaterBoDyID_C must be replaced with ReservoirSitesC
+
+        reservoir_release = [[-1 for i in self.var.waterBodyID_C]for i in range(366)]
+        for res in list(df)[2:]:
+            if res in waterBodyID_C_tolist:
+                res_index = waterBodyID_C_tolist.index(int(float(res)))
+
+                for day in range(366):
+                    reservoir_release[day][res_index] = df[res][day]
+
+        reservoir_supply = [[-1 for i in self.var.waterBodyID_C]for i in range(366)]
+        if 'Reservoirs_supply' in pd.read_excel(xl_settings_file_path, None).keys():
+            df2 = pd.read_excel(xl_settings_file_path, sheet_name='Reservoirs_supply')
+            for res in list(df2)[2:]:
+                if res in waterBodyID_C_tolist:
+                    res_index = waterBodyID_C_tolist.index(int(float(res)))
+
+                    for day in range(366):
+                        reservoir_supply[day][res_index] = df2[res][day]
+        else:
+            reservoir_supply = reservoir_release.copy()
+        
+        return reservoir_release, reservoir_supply
+
 
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
@@ -169,6 +200,19 @@ class reservoir(HydroModule):
             np.put(self.var.ReservoirStorageIniM3, self.var.ReservoirIndex, ReservoirStorageIniM3CC)
 
             self.var.ReservoirStorageM3 = self.var.ReservoirStorageIniM3
+
+            self.var.reservoir_releases_excel_option = False 
+            if 'reservoir_releases_in_Excel_settings' in option:
+                if checkOption('reservoir_releases_in_Excel_settings'):
+                    if 'Excel_settings_file' in binding:
+                        self.var.reservoir_release_excel_option = True 
+                        xl_settings_file_path = cbinding('Excel_settings_file')
+                        self.var.reservoir_releases, self.var.reservoir_supply = \
+                            self.reservoir_releases(xl_settings_file_path)
+                        
+                        self.var.reservoir_releases = np.array(self.var.reservoir_releases)
+                        self.var.reservoir_supply = np.array(self.var.reservoir_supply)
+
 
     def dynamic_inloop(self, NoRoutingExecuted):
         """ dynamic part of the lake routine
