@@ -21,17 +21,19 @@ from nine import range
 
 import warnings
 import importlib
+# importlib to import pandas as pd and excel for additional reservoirs as Excel table
 
 from pcraster.operations import ifthen, boolean, defined, lookupscalar
 import numpy as np
-import pandas as pd
+
 
 from ..global_modules.settings import LisSettings, MaskInfo
-from ..global_modules.add1 import loadmap, compressArray, decompress, makenumpy
+from ..global_modules.add1 import loadmap, compressArray, decompress, makenumpy, readwaterbody_Excel
 from ..global_modules.errors import LisfloodWarning
 from . import HydroModule
 
-Excel_settings_file = "cwatm_settings_reservoirs_morava2.xlsx"
+
+
 
 class reservoir(HydroModule):
 
@@ -50,32 +52,26 @@ class reservoir(HydroModule):
         self.var = reservoir_variable
 
     def reservoir_releases(self,xl_settings_file_path):
+        """
+        Read daily reservoir release data as 2D numpy array [reservoirs ,366 days]
+        :param self: all variables of self
+        :param xl_settings_file_path: Excel file with sheet "Reservoirs_downstream"
+        :return: 2D numpy array with release data per reservoir
+        """
+
         pd = importlib.import_module ("pandas", package=None)
         df = pd.read_excel(xl_settings_file_path, sheet_name= 'Reservoirs_downstream')
-        waterBodyID_C_tolist = self.var.waterBodyID_C.tolist() #WaterBoDyID_C must be replaced with ReservoirSitesC
+        ReservoirSites_tolist = self.var.ReservoirSitesCC.tolist()
 
-        reservoir_release = [[-1 for i in self.var.waterBodyID_C]for i in range(366)]
+        reservoir_release = [[-1 for i in self.var.ReservoirSitesCC] for i in range(366)]
         for res in list(df)[2:]:
-            if res in waterBodyID_C_tolist:
-                res_index = waterBodyID_C_tolist.index(int(float(res)))
+            if res in ReservoirSites_tolist:
+                res_index = ReservoirSites_tolist.index(int(float(res)))
 
                 for day in range(366):
                     reservoir_release[day][res_index] = df[res][day]
 
-        reservoir_supply = [[-1 for i in self.var.waterBodyID_C]for i in range(366)]
-        if 'Reservoirs_supply' in pd.read_excel(xl_settings_file_path, None).keys():
-            df2 = pd.read_excel(xl_settings_file_path, sheet_name='Reservoirs_supply')
-            for res in list(df2)[2:]:
-                if res in waterBodyID_C_tolist:
-                    res_index = waterBodyID_C_tolist.index(int(float(res)))
-
-                    for day in range(366):
-                        reservoir_supply[day][res_index] = df2[res][day]
-        else:
-            reservoir_supply = reservoir_release.copy()
-        
-        return reservoir_release, reservoir_supply
-
+        return reservoir_release
 
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
@@ -100,8 +96,22 @@ class reservoir(HydroModule):
             self.var.ReservoirSitesC = loadmap('ReservoirSites')
             self.var.ReservoirSitesC[self.var.ReservoirSitesC < 1] = 0
             self.var.ReservoirSitesC[self.var.IsChannel == 0] = 0
+
             # Get rid of any reservoirs that are not part of the channel network
             self.var.ReservoirSitesCC = np.compress(self.var.ReservoirSitesC > 0, self.var.ReservoirSitesC)
+            self.var.ReservoirIndex = np.nonzero(self.var.ReservoirSitesC)[0]
+
+
+            if option['reservoir_lakes_Excel']:
+                xl_settings_file_path = "P:/watmodel/Lisflood/regions/morava_3arc/input/Lakes_Reservoirs_ID_tables/cwatm_settings_reservoirs_morava.xlsx"
+                # look into the Excel to find if there are new reservoirs
+                self.var.ReservoirSitesC = readwaterbody_Excel(self,xl_settings_file_path,self.var.ReservoirSitesC,2,3)
+
+                self.var.ReservoirSitesCC = np.compress(self.var.ReservoirSitesC > 0, self.var.ReservoirSitesC)
+                self.var.ReservoirIndex = np.nonzero(self.var.ReservoirSitesC)[0]
+
+
+            # check if no reservoir is in the mask map area => no reservoir function is used
             if self.var.ReservoirSitesCC.size == 0:
                 # break if no reservoirs
                 warnings.warn(LisfloodWarning('There are no reservoirs. Reservoirs simulation won\'t run'))
@@ -110,13 +120,14 @@ class reservoir(HydroModule):
                 # rebuild lists of reported files with simulateReservoirs and repsimulateReservoirs = False
                 settings.build_reportedmaps_dicts()
                 return
-            self.var.ReservoirIndex = np.nonzero(self.var.ReservoirSitesC)[0]
+
 
             self.var.IsStructureKinematic = np.where(self.var.ReservoirSitesC > 0, np.bool8(1), self.var.IsStructureKinematic)
             # Add reservoir locations to structures map (used to modify LddKinematic
             # and to calculate LddStructuresKinematic)
 
-            ReservoirSitePcr = loadmap('ReservoirSites', pcr=True)
+            #ReservoirSitePcr = loadmap('ReservoirSites', pcr=True)
+            ReservoirSitePcr = decompress(self.var.ReservoirSitesC)
             self.var.ReservoirSites = ReservoirSitePcr
             ReservoirSitePcr = ifthen((defined(ReservoirSitePcr) & boolean(decompress(self.var.IsChannel))), ReservoirSitePcr)
             # Get rid of any reservoirs that are not part of the channel network
@@ -175,12 +186,48 @@ class reservoir(HydroModule):
             self.var.NormalReservoirOutflowCC = np.where(self.var.NormalReservoirOutflowCC > self.var.MinReservoirOutflowCC, self.var.NormalReservoirOutflowCC, self.var.MinReservoirOutflowCC+0.01)
             self.var.NormalReservoirOutflowCC = np.where(self.var.NormalReservoirOutflowCC < self.var.NonDamagingReservoirOutflowCC, self.var.NormalReservoirOutflowCC, self.var.NonDamagingReservoirOutflowCC-0.01)
 
+
+            if option['reservoir_lakes_Excel']:
+                # put here, because it comes before lakes and wetland initial
+                self.var.waterbodyTypeCC = self.var.ReservoirSitesCC * 0
+
+                for i in range(len(self.var.waterbody_info)):
+                    resint = int(self.var.waterbody_info[i][0])
+                    resindex = np.where(self.var.ReservoirSitesCC == resint)
+                    # test if reservoir is found
+                    if resindex[0].size > 0:
+                        resindex = resindex[0].tolist()[0]
+                        if int(self.var.waterbody_info[i][4]) > 0: self.var.waterbodyTypeCC[resindex] = int(self.var.waterbody_info[i][4])
+
+                        if float(self.var.waterbody_info[i][7]) > 0: self.var.NormalReservoirOutflowCC[resindex] = float(self.var.waterbody_info[i][7])
+                        # from Mio. m3 to m3 as rstor.txt is in m3
+                        if float(self.var.waterbody_info[i][10]) > 0: self.var.TotalReservoirStorageM3CC[resindex] = float(self.var.waterbody_info[i][10]) * 1000000.
+
+                        if float(self.var.waterbody_info[i][11]) > 0: self.var.ConservativeStorageLimitCC[resindex] = float(self.var.waterbody_info[i][11])
+                        if float(self.var.waterbody_info[i][12]) > 0: self.var.NormalStorageLimitCC[resindex]  = float(self.var.waterbody_info[i][12])
+                        if float(self.var.waterbody_info[i][13]) > 0: self.var.FloodStorageLimitCC[resindex]  = float(self.var.waterbody_info[i][13])
+                        if float(self.var.waterbody_info[i][14]) > 0: self.var.MinReservoirOutflowCC[resindex] = float(self.var.waterbody_info[i][14])
+                        if float(self.var.waterbody_info[i][15]) > 0: self.var.NormalReservoirOutflowCC[resindex] = float(self.var.waterbody_info[i][15])
+                        if float(self.var.waterbody_info[i][16]) > 0: self.var.NonDamagingReservoirOutflowCC[resindex] = float(self.var.waterbody_info[i][16])
+
+                        if float(self.var.waterbody_info[i][17]) > 0: adjust_Normal_FloodCC  = float(self.var.waterbody_info[i][17])
+                        self.var.Normal_FloodStorageLimitCC[resindex]  = self.var.NormalStorageLimitCC[resindex]  + adjust_Normal_FloodCC * (
+                                    self.var.FloodStorageLimitCC[resindex]  - self.var.NormalStorageLimitCC[resindex] )
+
+
             # Repeatedly used expressions in reservoirs routine
             self.var.DeltaO = self.var.NormalReservoirOutflowCC - self.var.MinReservoirOutflowCC
             self.var.DeltaLN = self.var.NormalStorageLimitCC - 2 * self.var.ConservativeStorageLimitCC
             self.var.DeltaLF = self.var.FloodStorageLimitCC - self.var.NormalStorageLimitCC
             self.var.DeltaNFL = self.var.FloodStorageLimitCC - self.var.Normal_FloodStorageLimitCC
 
+
+            # read daily reservoir release data
+            if option['reservoir_lakes_Excel'] & option['reservoir_release']:
+                self.var.reservoir_releases = np.array(self.reservoir_releases(xl_settings_file_path))
+                # self.var.CalendarDay
+
+            
             ReservoirInitialFillValue = loadmap('ReservoirInitialFillValue')
             if np.max(ReservoirInitialFillValue) == -9999:
                 ReservoirInitialFill = self.var.NormalStorageLimitCC,
@@ -201,18 +248,6 @@ class reservoir(HydroModule):
 
             self.var.ReservoirStorageM3 = self.var.ReservoirStorageIniM3
 
-            self.var.reservoir_releases_excel_option = False 
-            if 'reservoir_releases_in_Excel_settings' in option:
-                if checkOption('reservoir_releases_in_Excel_settings'):
-                    if 'Excel_settings_file' in binding:
-                        self.var.reservoir_release_excel_option = True 
-                        xl_settings_file_path = cbinding('Excel_settings_file')
-                        self.var.reservoir_releases, self.var.reservoir_supply = \
-                            self.reservoir_releases(xl_settings_file_path)
-                        
-                        self.var.reservoir_releases = np.array(self.var.reservoir_releases)
-                        self.var.reservoir_supply = np.array(self.var.reservoir_supply)
-
 
     def dynamic_inloop(self, NoRoutingExecuted):
         """ dynamic part of the lake routine
@@ -226,6 +261,7 @@ class reservoir(HydroModule):
         option = settings.options
         maskinfo = MaskInfo.instance()
         if option['simulateReservoirs'] and not option['InitLisflood']:
+
             InvDtSecDay = 1 / float(86400)
             # InvDtSecDay=self.var.InvDtSec
             # ReservoirInflow = cover(ifthen(defined(self.var.ReservoirSites), upstream(
@@ -293,6 +329,17 @@ class reservoir(HydroModule):
             ReservoirOutflow = np.where((ReservoirOutflow > 1.2 * ReservoirInflowCC) &
                                         (ReservoirOutflow > self.var.NormalReservoirOutflowCC) &
                                         (self.var.ReservoirFillCC < self.var.FloodStorageLimitCC), temp, ReservoirOutflow)
+
+            # new reservoir release function if reservoir watertyp is 3
+            # if reservoir water typ is 2 (or not defined then use previous function
+            if option['reservoir_lakes_Excel'] & option['reservoir_release']:
+                reservoir_releaseCC = self.var.reservoir_releases[self.var.CalendarDay - 1]
+                release = np.where(reservoir_releaseCC > -1, reservoir_releaseCC * self.var.ReservoirStorageM3CC * InvDtSecDay, ReservoirOutflow)
+                ReservoirOutflow = np.where(self.var.ReservoirFillCC > self.var.FloodStorageLimitCC, ReservoirOutflow, release)
+
+                #a = np.where(self.var.waterbody_typeCC == 3, 1.22, ReservoirOutflow)
+
+
 
             QResOutM3DtCC = ReservoirOutflow * self.var.DtRouting
             # Reservoir outflow in [m3] per sub step

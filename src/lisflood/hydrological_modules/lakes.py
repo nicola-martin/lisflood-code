@@ -22,7 +22,7 @@ import numpy as np
 import pcraster
 
 from ..global_modules.errors import LisfloodWarning
-from ..global_modules.add1 import loadmap, compressArray, decompress
+from ..global_modules.add1 import loadmap, compressArray, decompress, readwaterbody_Excel
 from ..global_modules.settings import LisSettings, MaskInfo
 from . import HydroModule
 
@@ -68,6 +68,16 @@ class lakes(HydroModule):
             self.var.LakeSitesCC = np.compress(LakeSitesC > 0, LakeSitesC)
             self.var.LakeIndex = np.nonzero(LakeSitesC)[0]
 
+
+
+            if option['reservoir_lakes_Excel']:
+                xl_settings_file_path = "P:/watmodel/Lisflood/regions/morava_3arc/input/Lakes_Reservoirs_ID_tables/cwatm_settings_reservoirs_morava.xlsx"
+                # look into the Excel to find if there are new reservoirs
+                LakeSitesC  = readwaterbody_Excel(self,xl_settings_file_path,LakeSitesC, 1,1)
+                self.var.LakeSitesCC = np.compress(LakeSitesC > 0, LakeSitesC)
+                self.var.LakeIndex = np.nonzero(LakeSitesC)[0]
+
+
             if self.var.LakeSitesCC.size == 0:
                 warnings.warn(LisfloodWarning('There are no lakes. Lakes simulation won\'t run'))
                 option['simulateLakes'] = False
@@ -83,7 +93,8 @@ class lakes(HydroModule):
 
             # PCRaster part
             # -----------------------
-            LakeSitePcr = loadmap('LakeSites', pcr=True)
+            #LakeSitePcr = loadmap('LakeSites', pcr=True)
+            LakeSitePcr = decompress(LakeSitesC)
             LakeSitePcr = pcraster.ifthen((pcraster.defined(LakeSitePcr) & pcraster.boolean(decompress(self.var.IsChannel))), LakeSitePcr)
             IsStructureLake = pcraster.boolean(LakeSitePcr)
             # additional structure map only for lakes to calculate water balance
@@ -109,6 +120,7 @@ class lakes(HydroModule):
             # Lake parameter A (suggested  value equal to outflow width in [m])
             # multiplied with the calibration parameter LakeMultiplier
 
+
             LakeInitialLevelValue  = loadmap('LakeInitialLevelValue')
             if np.max(LakeInitialLevelValue) == -9999:
                 LakeAvNetInflowEstimate = pcraster.lookupscalar(str(binding['TabLakeAvNetInflowEstimate']), LakeSitePcr)
@@ -125,6 +137,30 @@ class lakes(HydroModule):
                 # Initial lake storage [m3]  based on: S = LakeArea * H
 
                 self.var.LakeAvNetCC = np.compress(LakeSitesC > 0, loadmap('PrevDischarge'))
+
+
+            if option['reservoir_lakes_Excel']:
+                # put here, because it comes before lakes and wetland initial
+                ##self.var.waterbodyTypeCC = self.var.ReservoirSitesCC * 0
+
+                for i in range(len(self.var.waterbody_info)):
+                    lakeint = int(self.var.waterbody_info[i][0])
+                    lakeindex = np.where(self.var.LakeSitesCC == lakeint)
+                    # test if reservoir is found
+                    if lakeindex[0].size > 0:
+                        lakeindex = lakeindex[0].tolist()[0]
+                        if int(self.var.waterbody_info[i][4]) == 1: self.var.waterbodyTypeCC = np.append(self.var.waterbodyTypeCC,1)
+
+                        # from km2 to m2 as lakearea.txt is in m2
+                        if float(self.var.waterbody_info[i][6]) > 0: self.var.LakeAreaCC[lakeindex] = float(self.var.waterbody_info[i][6]) * 1000000.
+                        if float(self.var.waterbody_info[i][8]) > 0:
+                            self.var.LakeACC[lakeindex]  = float(self.var.waterbody_info[i][8]) * float(self.var.waterbody_info[i][9])
+                        # check if thwere is a inital map already
+                        if (np.max(LakeInitialLevelValue) > -9999) | (np.isnan(self.var.LakeAvNetCC[lakeindex])):
+                            self.var.LakeAvNetCC[lakeindex] = float(self.var.waterbody_info[i][7])
+                            LakeStorageIniM3CC[lakeindex] = self.var.LakeAreaCC[lakeindex] * np.sqrt(self.var.LakeAvNetCC[lakeindex] / self.var.LakeACC[lakeindex])
+                            self.var.LakeLevelCC[lakeindex] = LakeStorageIniM3CC[lakeindex] / self.var.LakeAreaCC[lakeindex]
+
 
             LakePrevInflowValue  = loadmap('LakePrevInflowValue')
             if np.max(LakeInitialLevelValue) == -9999:

@@ -184,7 +184,6 @@ class LisfloodModel_ini(DynamicModel):
 
         # run intial misc to get all global variables
         self.misc_module.initial()
-
         self.landusechange_module.initial()
 
         self.snow_module.initial()
