@@ -59,23 +59,22 @@ class lakes(HydroModule):
 
         if option['simulateLakes'] and not option['InitLisflood']:
 
-            LakeSitesC = loadmap('LakeSites')
-            LakeSitesC[LakeSitesC < 1] = 0
-            LakeSitesC[self.var.IsChannel == 0] = 0
+            self.var.LakeSitesC = loadmap('LakeSites')
+            self.var.LakeSitesC[self.var.LakeSitesC < 1] = 0
+            self.var.LakeSitesC[self.var.IsChannel == 0] = 0
             # Get rid of any lakes that are not part of the channel network
 
             # mask lakes sites when using sub-catchments mask
-            self.var.LakeSitesCC = np.compress(LakeSitesC > 0, LakeSitesC)
-            self.var.LakeIndex = np.nonzero(LakeSitesC)[0]
+            self.var.LakeSitesCC = np.compress(self.var.LakeSitesC > 0, self.var.LakeSitesC)
+            self.var.LakeIndex = np.nonzero(self.var.LakeSitesC)[0]
 
 
 
             if option['reservoir_lakes_Excel']:
-                xl_settings_file_path = "P:/watmodel/Lisflood/regions/morava_3arc/input/Lakes_Reservoirs_ID_tables/cwatm_settings_reservoirs_morava.xlsx"
-                # look into the Excel to find if there are new reservoirs
-                LakeSitesC  = readwaterbody_Excel(self,xl_settings_file_path,LakeSitesC, 1,1)
-                self.var.LakeSitesCC = np.compress(LakeSitesC > 0, LakeSitesC)
-                self.var.LakeIndex = np.nonzero(LakeSitesC)[0]
+                # look into the Excel to find if there are new lakes  => waterbodyType = 5
+                self.var.LakeSitesC  = readwaterbody_Excel(self,self.var.xl_settings_file_path,self.var.LakeSitesC, 1,1)
+                self.var.LakeSitesCC = np.compress(self.var.LakeSitesC > 0, self.var.LakeSitesC)
+                self.var.LakeIndex = np.nonzero(self.var.LakeSitesC)[0]
 
 
             if self.var.LakeSitesCC.size == 0:
@@ -87,14 +86,14 @@ class lakes(HydroModule):
                 return
             # break if no lakes
 
-            self.var.IsStructureKinematic = np.where(LakeSitesC > 0, np.bool8(1), self.var.IsStructureKinematic)
+            self.var.IsStructureKinematic = np.where(self.var.LakeSitesC > 0, np.bool8(1), self.var.IsStructureKinematic)
             # Add lake locations to structures map (used to modify LddKinematic
             # and to calculate LddStructuresKinematic)
 
             # PCRaster part
             # -----------------------
             #LakeSitePcr = loadmap('LakeSites', pcr=True)
-            LakeSitePcr = decompress(LakeSitesC)
+            LakeSitePcr = decompress(self.var.LakeSitesC)
             LakeSitePcr = pcraster.ifthen((pcraster.defined(LakeSitePcr) & pcraster.boolean(decompress(self.var.IsChannel))), LakeSitePcr)
             IsStructureLake = pcraster.boolean(LakeSitePcr)
             # additional structure map only for lakes to calculate water balance
@@ -108,15 +107,13 @@ class lakes(HydroModule):
             # has to be checked if this works in forecasting mode!
 
             LakeArea = pcraster.lookupscalar(str(binding['TabLakeArea']), LakeSitePcr)
-            LakeAreaC = compressArray(LakeArea)
-            self.var.LakeAreaCC = np.compress(LakeSitesC > 0, LakeAreaC)
+            self.var.LakeAreaC = compressArray(LakeArea)
+            self.var.LakeAreaCC = np.compress(self.var.LakeSitesC > 0, self.var.LakeAreaC)
                                  
-            self.var.LakeSitesC2 = LakeSitesC   # additional var 
-
             # Surface area of each lake [m2]
             LakeA = pcraster.lookupscalar(str(binding['TabLakeA']), LakeSitePcr)
             LakeAC = compressArray(LakeA) * loadmap('LakeMultiplier')
-            self.var.LakeACC = np.compress(LakeSitesC > 0, LakeAC)
+            self.var.LakeACC = np.compress(self.var.LakeSitesC > 0, LakeAC)
             # Lake parameter A (suggested  value equal to outflow width in [m])
             # multiplied with the calibration parameter LakeMultiplier
 
@@ -125,23 +122,21 @@ class lakes(HydroModule):
             if np.max(LakeInitialLevelValue) == -9999:
                 LakeAvNetInflowEstimate = pcraster.lookupscalar(str(binding['TabLakeAvNetInflowEstimate']), LakeSitePcr)
                 LakeAvNetC = compressArray(LakeAvNetInflowEstimate)
-                self.var.LakeAvNetCC = np.compress(LakeSitesC > 0, LakeAvNetC)
+                self.var.LakeAvNetCC = np.compress(self.var.LakeSitesC > 0, LakeAvNetC)
 
                 LakeStorageIniM3CC = self.var.LakeAreaCC * np.sqrt(self.var.LakeAvNetCC / self.var.LakeACC)
                 # Initial lake storage [m3]  based on: S = LakeArea * H = LakeArea
                 # * sqrt(Q/a)
                 self.var.LakeLevelCC = LakeStorageIniM3CC / self.var.LakeAreaCC
             else:
-                self.var.LakeLevelCC = np.compress(LakeSitesC > 0, LakeInitialLevelValue)
+                self.var.LakeLevelCC = np.compress(self.var.LakeSitesC > 0, LakeInitialLevelValue)
                 LakeStorageIniM3CC = self.var.LakeAreaCC * self.var.LakeLevelCC
                 # Initial lake storage [m3]  based on: S = LakeArea * H
 
-                self.var.LakeAvNetCC = np.compress(LakeSitesC > 0, loadmap('PrevDischarge'))
+                self.var.LakeAvNetCC = np.compress(self.var.LakeSitesC > 0, loadmap('PrevDischarge'))
 
 
             if option['reservoir_lakes_Excel']:
-                # put here, because it comes before lakes and wetland initial
-                ##self.var.waterbodyTypeCC = self.var.ReservoirSitesCC * 0
 
                 for i in range(len(self.var.waterbody_info)):
                     lakeint = int(self.var.waterbody_info[i][0])
@@ -149,7 +144,6 @@ class lakes(HydroModule):
                     # test if reservoir is found
                     if lakeindex[0].size > 0:
                         lakeindex = lakeindex[0].tolist()[0]
-                        if int(self.var.waterbody_info[i][4]) == 1: self.var.waterbodyTypeCC = np.append(self.var.waterbodyTypeCC,1)
 
                         # from km2 to m2 as lakearea.txt is in m2
                         if float(self.var.waterbody_info[i][6]) > 0: self.var.LakeAreaCC[lakeindex] = float(self.var.waterbody_info[i][6]) * 1000000.
@@ -161,12 +155,14 @@ class lakes(HydroModule):
                             LakeStorageIniM3CC[lakeindex] = self.var.LakeAreaCC[lakeindex] * np.sqrt(self.var.LakeAvNetCC[lakeindex] / self.var.LakeACC[lakeindex])
                             self.var.LakeLevelCC[lakeindex] = LakeStorageIniM3CC[lakeindex] / self.var.LakeAreaCC[lakeindex]
 
+                self.var.LakeAreaC = maskinfo.in_zero()
+                np.put(self.var.LakeAreaC, self.var.LakeIndex, self.var.LakeAreaCC)
 
             LakePrevInflowValue  = loadmap('LakePrevInflowValue')
             if np.max(LakeInitialLevelValue) == -9999:
                 self.var.LakeInflowOldCC = np.bincount(self.var.downstruct, weights = self.var.ChanQ)[self.var.LakeIndex]
             else:
-                self.var.LakeInflowOldCC = np.compress(LakeSitesC > 0, LakePrevInflowValue)
+                self.var.LakeInflowOldCC = np.compress(self.var.LakeSitesC > 0, LakePrevInflowValue)
 
             # Repeatedly used expressions in lake routine
 
@@ -210,7 +206,7 @@ class lakes(HydroModule):
                 # 2. Q= a *H **2.0  (if you choose Q= a *H **1.5 you have to solve
                 # the formula of Cardano)
             else:
-                self.var.LakeOutflowCC = np.compress(LakeSitesC > 0, LakePrevOutflowValue)
+                self.var.LakeOutflowCC = np.compress(self.var.LakeSitesC > 0, LakePrevOutflowValue)
 
             self.var.LakeStorageM3CC = LakeStorageIniM3CC.copy()
             self.var.LakeStorageM3BalanceCC = LakeStorageIniM3CC.copy()
@@ -246,8 +242,21 @@ class lakes(HydroModule):
         if not(option['InitLisflood']) and option['simulateLakes']:    # only with no InitLisflood
 
             if NoRoutingExecuted==0:
-                self.var.LakeStorageM3CC=np.compress(self.var.LakeSitesC2 > 0, self.var.LakeStorageM3)
-            
+                self.var.LakeStorageM3CC=np.compress(self.var.LakeSitesC > 0, self.var.LakeStorageM3)
+
+                # Evaporation from lakes is calculated
+                ewLakesCC = np.compress(self.var.LakeSitesC > 0, self.var.EWRef)
+                # evaporation from open water [mm] to [m] * lake area [m2]
+                self.var.evaLakesCC = (ewLakesCC * 0.001 * self.var.LakeAreaCC) / self.var.NoRoutSteps
+                self.var.evaLakesCCsum = maskinfo.in_zero()
+
+            # calculate real evaporation (not more then water in the lake)
+            evaLakesCC = np.where((self.var.LakeStorageM3CC - self.var.evaLakesCC) > 0., self.var.evaLakesCC, 0.95 * self.var.LakeStorageM3CC)
+            # sum up real evaporation from lake
+            self.var.evaLakesCCsum += evaLakesCC
+            # Lake storage minus lake evaporation
+            self.var.LakeStorageM3CC = self.var.LakeStorageM3CC - evaLakesCC
+
             self.var.LakeInflowCC = np.bincount(self.var.downstruct, weights=self.var.ChanQ)[self.var.LakeIndex]
             # Lake inflow in [m3/s]
 
@@ -290,7 +299,7 @@ class lakes(HydroModule):
                 self.var.LakeStorageM3CC[self.var.LakeStorageM3CC < 0] = 0
                 self.var.LakeStorageM3CC[np.isnan(self.var.LakeStorageM3CC)] = 0
 
-            self.var.LakeStorageM3BalanceCC += LakeIn * self.var.DtRouting - QLakeOutM3DtCC
+            self.var.LakeStorageM3BalanceCC += LakeIn * self.var.DtRouting - QLakeOutM3DtCC - evaLakesCC
             # for mass balance, the lake storage is calculated every time step
             self.var.LakeLevelCC = self.var.LakeStorageM3CC / self.var.LakeAreaCC
 
@@ -321,11 +330,13 @@ class lakes(HydroModule):
                 self.var.LakeLevel = maskinfo.in_zero()
                 self.var.LakeInflowOld = maskinfo.in_zero()
                 self.var.LakeOutflow = maskinfo.in_zero()
+                self.var.evaLakesM3 = maskinfo.in_zero()
                 np.put(self.var.LakeStorageM3Balance, self.var.LakeIndex, self.var.LakeStorageM3BalanceCC)
                 np.put(self.var.LakeStorageM3, self.var.LakeIndex, self.var.LakeStorageM3CC)
                 np.put(self.var.LakeLevel, self.var.LakeIndex, self.var.LakeLevelCC)
                 np.put(self.var.LakeInflowOld, self.var.LakeIndex, self.var.LakeInflowOldCC)
                 np.put(self.var.LakeOutflow, self.var.LakeIndex, self.var.LakeOutflowCC)
+                np.put(self.var.evaLakesM3 , self.var.LakeIndex, self.var.evaLakesCCsum)
 
 
                 if option['repsimulateLakes']:

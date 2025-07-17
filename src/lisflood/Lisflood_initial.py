@@ -49,6 +49,7 @@ from .hydrological_modules.groundwater import groundwater
 from .hydrological_modules.surface_routing import surface_routing
 from .hydrological_modules.reservoir import reservoir
 from .hydrological_modules.lakes import lakes
+from .hydrological_modules.wetlands import wetlands
 from .hydrological_modules.polder import polder
 from .hydrological_modules.waterabstraction import waterabstraction
 from .hydrological_modules.indicatorcalc import indicatorcalc
@@ -138,6 +139,7 @@ class LisfloodModel_ini(DynamicModel):
         self.surface_routing_module = surface_routing(self)
         self.reservoir_module = reservoir(self)
         self.lakes_module = lakes(self)
+        self.wetlands_module = wetlands(self)
         self.polder_module = polder(self)
         self.waterabstraction_module = waterabstraction(self)
         self.indicatorcalc_module = indicatorcalc(self)
@@ -202,6 +204,7 @@ class LisfloodModel_ini(DynamicModel):
 
         self.reservoir_module.initial()
         self.lakes_module.initial()
+        self.wetlands_module.initial()
         self.polder_module.initial()
 
         self.transmission_module.initial()

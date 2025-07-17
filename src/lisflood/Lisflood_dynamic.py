@@ -93,7 +93,7 @@ class LisfloodModel_dyn(DynamicModel):
         self.leafarea_module.dynamic()
 
         # ***** READ variable water fraction ****************************
-        self.evapowater_module.dynamic_init()
+        #self.evapowater_module.dynamic_init() # not use anyway
 
         # ***** READ INFLOW HYDROGRAPHS (OPTIONAL)****************
         self.inflow_module.dynamic()

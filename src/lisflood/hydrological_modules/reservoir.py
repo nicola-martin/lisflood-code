@@ -101,11 +101,12 @@ class reservoir(HydroModule):
             self.var.ReservoirSitesCC = np.compress(self.var.ReservoirSitesC > 0, self.var.ReservoirSitesC)
             self.var.ReservoirIndex = np.nonzero(self.var.ReservoirSitesC)[0]
 
-
             if option['reservoir_lakes_Excel']:
-                xl_settings_file_path = "P:/watmodel/Lisflood/regions/morava_3arc/input/Lakes_Reservoirs_ID_tables/cwatm_settings_reservoirs_morava.xlsx"
-                # look into the Excel to find if there are new reservoirs
-                self.var.ReservoirSitesC = readwaterbody_Excel(self,xl_settings_file_path,self.var.ReservoirSitesC,2,3)
+                # load location of Excel file from settingsflie
+                self.var.xl_settings_file_path = binding['Excel_settings_file']
+                # look into the Excel to find if there are new reservoirs => waterbodyType = 2 and 3 (4 not yet included but reserved)
+                self.var.ReservoirSitesC = readwaterbody_Excel(self,self.var.xl_settings_file_path,self.var.ReservoirSitesC,2,3)
+                #self.var.ReservoirSitesC = readwaterbody_Excel(self, xl_settings_file_path, self.var.ReservoirSitesC, 2, 3)
 
                 self.var.ReservoirSitesCC = np.compress(self.var.ReservoirSitesC > 0, self.var.ReservoirSitesC)
                 self.var.ReservoirIndex = np.nonzero(self.var.ReservoirSitesC)[0]
@@ -189,15 +190,14 @@ class reservoir(HydroModule):
 
             if option['reservoir_lakes_Excel']:
                 # put here, because it comes before lakes and wetland initial
-                self.var.waterbodyTypeCC = self.var.ReservoirSitesCC * 0
-
+                self.var.reservoirTypeCC = self.var.ReservoirSitesCC * 0
                 for i in range(len(self.var.waterbody_info)):
                     resint = int(self.var.waterbody_info[i][0])
                     resindex = np.where(self.var.ReservoirSitesCC == resint)
                     # test if reservoir is found
                     if resindex[0].size > 0:
                         resindex = resindex[0].tolist()[0]
-                        if int(self.var.waterbody_info[i][4]) > 0: self.var.waterbodyTypeCC[resindex] = int(self.var.waterbody_info[i][4])
+                        if int(self.var.waterbody_info[i][4]) > 0: self.var.reservoirTypeCC[resindex] = int(self.var.waterbody_info[i][4])
 
                         if float(self.var.waterbody_info[i][7]) > 0: self.var.NormalReservoirOutflowCC[resindex] = float(self.var.waterbody_info[i][7])
                         # from Mio. m3 to m3 as rstor.txt is in m3
@@ -224,7 +224,7 @@ class reservoir(HydroModule):
 
             # read daily reservoir release data
             if option['reservoir_lakes_Excel'] & option['reservoir_release']:
-                self.var.reservoir_releases = np.array(self.reservoir_releases(xl_settings_file_path))
+                self.var.reservoir_releases = np.array(self.reservoir_releases(self.var.xl_settings_file_path))
                 # self.var.CalendarDay
 
             
@@ -335,10 +335,9 @@ class reservoir(HydroModule):
             if option['reservoir_lakes_Excel'] & option['reservoir_release']:
                 reservoir_releaseCC = self.var.reservoir_releases[self.var.CalendarDay - 1]
                 release = np.where(reservoir_releaseCC > -1, reservoir_releaseCC * self.var.ReservoirStorageM3CC * InvDtSecDay, ReservoirOutflow)
-                ReservoirOutflow = np.where(self.var.ReservoirFillCC > self.var.FloodStorageLimitCC, ReservoirOutflow, release)
-
-                #a = np.where(self.var.waterbody_typeCC == 3, 1.22, ReservoirOutflow)
-
+                release = np.where(self.var.ReservoirFillCC > self.var.FloodStorageLimitCC, ReservoirOutflow, release)
+                # only if reservoirType = 3 => use release
+                ReservoirOutflow = np.where(self.var.reservoirTypeCC == 3, release, ReservoirOutflow)
 
 
             QResOutM3DtCC = ReservoirOutflow * self.var.DtRouting

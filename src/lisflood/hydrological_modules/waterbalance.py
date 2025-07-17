@@ -218,8 +218,12 @@ class waterbalance(object):
             #WaterOut += areatotal(decompress(HillslopeOutM3), catch)
             if option['simulateLakes']:
                 WaterOut += np.take(np.bincount(self.var.Catchments, weights=self.var.EWLakeWBM3),self.var.Catchments)  #### EWLakeCUMM3 is not updated! Always = 0!!
+                WaterOut += np.take(np.bincount(self.var.Catchments, weights=self.var.evaLakesM3), self.var.Catchments)
             if option['openwaterevapo']:
-                WaterOut += np.take(np.bincount(self.var.Catchments, weights=self.var.EvaWBM3),self.var.Catchments)
+                WaterOut += np.take(np.bincount(self.var.Catchments, weights=self.var.EvaAddM3),self.var.Catchments)
+            if option['simulateWetlands']:
+                WaterOut += np.take(np.bincount(self.var.Catchments, weights=self.var.evaWetlandM3), self.var.Catchments)
+
             if option['TransLoss']:
                 WaterOut += np.take(np.bincount(self.var.Catchments, weights=self.var.TransCum),self.var.Catchments)
             if option['wateruse']:
