@@ -29,7 +29,7 @@ import numpy as np
 
 from ..global_modules.settings import LisSettings, MaskInfo
 from ..global_modules.add1 import loadmap, compressArray, decompress, makenumpy, readwaterbody_Excel
-from ..global_modules.errors import LisfloodWarning
+from ..global_modules.errors import LisfloodWarning, LisfloodError
 from . import HydroModule
 
 
@@ -60,7 +60,12 @@ class reservoir(HydroModule):
         """
 
         pd = importlib.import_module ("pandas", package=None)
-        df = pd.read_excel(xl_settings_file_path, sheet_name= 'Reservoirs_downstream')
+        try:
+            df = pd.read_excel(xl_settings_file_path, sheet_name='Reservoirs_downstream')
+        except:
+            msg ="The Excel file: {} exists but it does not have the sheet: Reservoirs_downstream\n".format(xl_settings_file_path)
+            raise LisfloodError(msg)
+
         ReservoirSites_tolist = self.var.ReservoirSitesCC.tolist()
 
         reservoir_release = [[-1 for i in self.var.ReservoirSitesCC] for i in range(366)]
@@ -101,6 +106,17 @@ class reservoir(HydroModule):
             self.var.ReservoirSitesCC = np.compress(self.var.ReservoirSitesC > 0, self.var.ReservoirSitesC)
             self.var.ReservoirIndex = np.nonzero(self.var.ReservoirSitesC)[0]
 
+
+            # optional reservoir_lakes_Excel: if not in put it as false:
+            if not('reservoir_lakes_Excel' in option):
+                option['reservoir_lakes_Excel'] = False
+            # optional reservoir_release': if not in put it as false:
+            if not('reservoir_release' in option):
+                option['reservoir_release'] = False
+            if not(option['reservoir_lakes_Excel']) and option['reservoir_release']:
+                msg = "Reservoir release method only works with option reservoir_lakes_Excel\n"
+                raise LisfloodError(msg)
+
             if option['reservoir_lakes_Excel']:
                 # load location of Excel file from settingsflie
                 self.var.xl_settings_file_path = binding['Excel_settings_file']
@@ -140,6 +156,16 @@ class reservoir(HydroModule):
             self.var.TotalReservoirStorageM3C = np.where(np.isnan(self.var.TotalReservoirStorageM3C), 0, self.var.TotalReservoirStorageM3C)
             self.var.TotalReservoirStorageM3CC = np.compress(self.var.ReservoirSitesC > 0, self.var.TotalReservoirStorageM3C)
             # Total storage of each reservoir [m3]
+
+            if not('openwatereva_area' in option):
+                option['openwatereva_area'] = False
+                # optional option openwatereva_area -> calculate evaporation from tabular area
+            if option['openwatereva_area']:
+                ResAreaM2 = lookupscalar(str(binding['TabResArea']), ReservoirSitePcr)
+                self.var.ResAreaC = compressArray(ResAreaM2)
+                self.var.ResAreaCC = np.compress(self.var.ReservoirSitesC > 0, self.var.ResAreaC)
+                # Reservoir area [m2]
+
 
             ConservativeStorageLimit = lookupscalar(str(binding['TabConservativeStorageLimit']), ReservoirSitePcr)
             ConservativeStorageLimitC = compressArray(ConservativeStorageLimit)
@@ -281,8 +307,29 @@ class reservoir(HydroModule):
             # print('RESERVOIRS MODULE IN')
             # print(np.sum(self.var.ReservoirStorageM3))
             if NoRoutingExecuted==0:
-                self.var.ReservoirStorageM3CC=np.compress(self.var.ReservoirSitesC > 0, self.var.ReservoirStorageM3)  ########################
-            # print(np.sum(self.var.ReservoirStorageM3CC))
+                self.var.ReservoirStorageM3CC=np.compress(self.var.ReservoirSitesC > 0, self.var.ReservoirStorageM3)
+                # print(np.sum(self.var.ReservoirStorageM3CC))
+                # Evaporation from lakes is calculated
+                ewResCC = np.compress(self.var.ReservoirSitesC > 0, self.var.EWRef)
+                # evaporation from open water [mm] to [m] * lake area [m2]
+                if option['openwatereva_area']:
+                    # calculate evaporation based on reservoir area and substract directly here
+                    # other wise evaporation is calculated in evapowater and substracted from discharge
+                    self.var.evaResCC = (ewResCC * 0.001 * self.var.ResAreaCC) / self.var.NoRoutSteps
+                self.var.evaResCCsum = ReservoirInflowCC  * 0
+
+
+            if option['openwatereva_area']:
+                # calculate real evaporation (not more then water in the reservoir(
+                evaResCC = np.where((self.var.ReservoirStorageM3CC - self.var.evaResCC) > 0., self.var.evaResCC, 0.95 * self.var.ReservoirStorageM3CC)
+                # sum up real evaporation from reservoir
+                self.var.evaResCCsum += evaResCC
+                # Reservoir storage minus reservoir evaporation
+                self.var.ReservoirStorageM3CC = self.var.ReservoirStorageM3CC - evaResCC
+            else:
+                #If evaporation is not calculated from area than evpoartion is calculated from fraction of open water in evapowater.py
+                evaResCC = self.var.ReservoirStorageM3CC * 0
+
             
             self.var.ReservoirStorageM3CC += QResInM3Dt
             # New reservoir storage [m3] = plus inflow for this sub step
@@ -399,13 +446,10 @@ class reservoir(HydroModule):
                 # expanding the size after last sub timestep
                 self.var.ReservoirStorageM3 = maskinfo.in_zero()
                 self.var.ReservoirFill = maskinfo.in_zero()
+                self.var.evaResM3 = maskinfo.in_zero()
                 np.put(self.var.ReservoirStorageM3, self.var.ReservoirIndex, self.var.ReservoirStorageM3CC)
                 np.put(self.var.ReservoirFill, self.var.ReservoirIndex, self.var.ReservoirFillCC)
-
-                # print('RESERVOIRS MODULE OUT')
-                # print(np.sum(self.var.ReservoirStorageM3))
-                # print(np.sum(self.var.ReservoirStorageM3CC))
-
+                np.put(self.var.evaResM3, self.var.ReservoirIndex, self.var.evaResCCsum)
 
                 if option['repsimulateReservoirs']:
                     np.put(self.var.ReservoirInflowM3S, self.var.ReservoirIndex, self.var.sumResInCC / self.var.DtSec)

@@ -50,7 +50,7 @@ class evapowater(HydroModule):
         # ************************************************************
         # ***** EVAPORATION
         # ************************************************************
-        #self.var.EvaCumM3 = MaskInfo.instance().in_zero()
+        self.var.EvaCumM3 = MaskInfo.instance().in_zero()
         self.var.EvaWBM3 = MaskInfo.instance().in_zero()
         # water use cumulated amount
         # water use substep amount
@@ -67,8 +67,15 @@ class evapowater(HydroModule):
             # Reservoir is taken out because there are no metadata on area for reservoirs
             #if option['simulateReservoirs']:
             #    waterbody += self.var.ReservoirSitesC
-            if option['simulateLakes']:
+
+            # optional use evaporation directly from lakes by using the area of a lake
+            # otherwise it using the previous method
+            if not('openwatereva_area' in option):
+                option['openwatereva_area'] = False
+            if option['simulateLakes'] and option['openwatereva_area']:
                 waterbody += self.var.LakeSitesC
+            if option['simulateReservoirs'] and option['openwatereva_area']:
+                waterbody += self.var.ReservoirSitesC
             if option['simulateWetlands']:
                 waterbody += self.var.WetlandSitesC
             waterbody[waterbody>0] = 1
@@ -83,7 +90,17 @@ class evapowater(HydroModule):
             # invert and compress  => every cell who should be used has a 1 , all other = 0
             self.var.evaMask = -(compressArray(evaMask)-1)
 
-            #report(decompress(waterbody), "P:/watmodel/Lisflood/regions/morava_3arc/settings/w1.map")
+            #Using the previous method - substracting evaporation from fraction of water in a gridcell
+            lmask = ifthenelse(LakeMask != 0, self.var.LddStructuresKinematic, 5)
+            LddEva = lddrepair(lmask)
+            lddC = compressArray(LddEva)
+            inAr = decompress(np.arange(maskinfo.info.mapC[0], dtype="int32"))
+            self.var.downEva = (compressArray(downstream(LddEva, inAr))).astype("int32")
+            # each upstream pixel gets the id of the downstream pixel
+            self.var.downEva[lddC == 5] = maskinfo.info.mapC[0]
+            self.var.maxNoEva = int(loadmap('maxNoEva'))
+            # all pits gets a high number
+            # still to test if this works
 
 
     def dynamic(self):
@@ -95,19 +112,49 @@ class evapowater(HydroModule):
             # ***********************************************
             # *********  EVAPORATION FROM OPEN WATER  *******
             # ***********************************************
-            UpstreamEva = self.var.EWRef * self.var.MMtoM3 * self.var.WaterFraction
-            # only for those where there is no reservoir, lake, wetland cell
-            UpstreamEva = UpstreamEva * self.var.evaMask
-            # evaporation for loop is amount of water per timestep [cu m]
-            # Volume of potential evaporation from water surface  per time step (conversion to [m3])
-            ChanMIter = self.var.ChanM3Kin.copy()
-            # for Iteration loop: First value is amount of water in the channel
-            # amount of water in bankful (first line of routing)
-            self.var.EvaAddM3 = np.minimum(UpstreamEva, ChanMIter * 0.9)
-            # 10% of the discharge must stay in the river
+            if  not ('openwatereva_area' in option):
+                # substract evaporation from potential water evapo x area of lake, reservoir, wetland
+                # this has to be used if you want to use changing area of wetlands
+
+                UpstreamEva = self.var.EWRef * self.var.MMtoM3 * self.var.WaterFraction
+                # only for those where there is no reservoir, lake, wetland cell
+                # evaMask is calculate in initial and takes out all lakes, res., wetlands
+                UpstreamEva = UpstreamEva * self.var.evaMask
+                # evaporation for loop is amount of water per timestep [cu m]
+                # Volume of potential evaporation from water surface  per time step (conversion to [m3])
+                ChanMIter = self.var.ChanM3Kin.copy()
+                # for Iteration loop: First value is amount of water in the channel
+                # amount of water in bankful (first line of routing)
+                self.var.EvaAddM3 = np.minimum(UpstreamEva, ChanMIter * 0.9)
+                # 10% of the discharge must stay in the river
+
+
+            else:
+                UpstreamEva = self.var.EWRef * self.var.MMtoM3 * self.var.WaterFraction
+                # evaporation for loop is amount of water per timestep [cu m]
+                # Volume of potential evaporation from water surface  per time step (conversion to [m3])
+                ChanMIter = self.var.ChanM3Kin.copy()
+                # for Iteration loop: First value is amount of water in the channel
+                # amount of water in bankful (first line of routing)
+                ChanLeft = ChanMIter * 0.1
+                # 10% of the discharge must stay in the river
+                self.var.EvaAddM3 = MaskInfo.instance().in_zero()
+                #   real water consumption is set to 0
+
+                for NoEvaExe in range(self.var.maxNoEva):
+                    ChanHelp = np.maximum(ChanMIter - UpstreamEva, ChanLeft)
+                    EvaIter = np.maximum(UpstreamEva - (ChanMIter - ChanHelp), 0)
+                    # new amount is amout - evaporation use till a limit
+                    # new evaporation is evaporation - water is used from channel network
+                    ChanMIter = ChanHelp.copy()
+                    self.var.EvaAddM3 += UpstreamEva - EvaIter
+                    # evaporation is added up; the sum is the same as sum of original water use
+                    # UpstreamEva = upstream(self.var.LddEva,EvaIter)
+                    UpstreamEva = np.bincount(self.var.downEva, weights=EvaIter)[:-1]
+                    # remaining water use is moved down the the river system,
 
             self.var.EvaAddM3Dt = self.var.EvaAddM3 * self.var.InvNoRoutSteps
             # splitting water use per timestep into water use per sub time step
-            #self.var.EvaCumM3 += self.var.EvaAddM3
-            #self.var.EvaWBM3 = self.var.EvaAddM3
+            self.var.EvaCumM3 += self.var.EvaAddM3
+            self.var.EvaWBM3 = self.var.EvaAddM3
             # summing up for water balance calculation

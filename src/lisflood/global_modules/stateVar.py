@@ -66,6 +66,11 @@ class stateVar(object):
             if option['simulateLakes']:
                 dumpObject("LakeStorageM3", self.var.LakeStorageM3CC, sample)
                 dumpObject("LakeOutflow", self.var.LakeOutflow, sample)
+            ## Wetlands
+            if option['simulateWetlands']:
+                dumpObject("WetlandStorageM3", self.var.WetlandStorageM3CC, sample)
+                dumpObject("WetlandOutflow", self.var.WetlandOutflow, sample)
+
             ## Routing
             dumpObject("ChanM3Kin", self.var.ChanM3Kin, sample)
             dumpObject("ChanQ", self.var.ChanQ, sample)
@@ -116,6 +121,9 @@ class stateVar(object):
         if option['simulateLakes']:
             self.var.LakeStorageM3CC = loadObject("LakeStorageM3", sample)
             self.var.LakeOutflow = loadObject("LakeOutflow", sample)
+        if option['simulateWetlands']:
+            self.var.WetlandStorageM3CC = loadObject("WetlandStorageM3", sample)
+            self.var.WetlandOutflow = loadObject("WetlandOutflow", sample)
         ## Routing
         self.var.ChanM3Kin = loadObject("ChanM3Kin", sample)
         self.var.ChanQ = loadObject("ChanQ", sample)

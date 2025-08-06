@@ -61,6 +61,7 @@ from .hydrological_modules.opensealed import opensealed
 from .hydrological_modules.waterbalance import waterbalance
 from .hydrological_modules.waterlevel import waterlevel
 from .hydrological_modules.structures import structures
+from .hydrological_modules.transient import groundwater_modflow
 
 from .global_modules.output import outputTssMap
 from .global_modules.stateVar import stateVar
@@ -153,6 +154,7 @@ class LisfloodModel_ini(DynamicModel):
         self.waterbalance_module = waterbalance(self)
         self.waterlevel_module = waterlevel(self)
         self.structures_module = structures(self)
+        self.groundwater_modflow_module = groundwater_modflow(self)
 
         self.prescribed_vegetation = self.epic_settings.prescribed_vegetation
         self.interactive_vegetation = []
@@ -197,6 +199,9 @@ class LisfloodModel_ini(DynamicModel):
         self.routing_module.initial()
 
         self.groundwater_module.initial()
+        if option.get('groundwater_ModFlow'):
+            self.groundwater_modflow_module.initial()
+
         self.waterlevel_module.initial()
 
         self.inflow_module.initial()

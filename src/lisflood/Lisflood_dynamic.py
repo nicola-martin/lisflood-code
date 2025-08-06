@@ -147,6 +147,9 @@ class LisfloodModel_dyn(DynamicModel):
         self.soil_module.dynamic_perpixel()
  
         self.groundwater_module.dynamic()
+
+        if option.get('groundwater_ModFlow'):
+            self.groundwater_modflow_module.dynamic()
  
         # ************************************************************
         # ***** STOP if no routing is required    ********************

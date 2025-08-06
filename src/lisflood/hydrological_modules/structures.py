@@ -59,3 +59,4 @@ class structures(object):
             self.var.LddKinematic = lddrepair(ifthenelse(IsUpsOfStructureKinematic, 5, self.var.LddKinematic))
             # Cells just upstream of each structure are treated as pits in the kinematic wave
             # channel routing
+
