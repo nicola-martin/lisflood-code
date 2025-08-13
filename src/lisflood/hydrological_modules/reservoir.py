@@ -87,6 +87,7 @@ class reservoir(HydroModule):
         # ************************************************************
         # ***** RESERVOIRS
         # ************************************************************
+
         settings = LisSettings.instance()
         option = settings.options
         maskinfo = MaskInfo.instance()
@@ -107,10 +108,10 @@ class reservoir(HydroModule):
             self.var.ReservoirIndex = np.nonzero(self.var.ReservoirSitesC)[0]
 
 
-            # optional reservoir_lakes_Excel: if not in put it as false:
+            # optional reservoir_lakes_Excel: if not in put it as False
             if not('reservoir_lakes_Excel' in option):
                 option['reservoir_lakes_Excel'] = False
-            # optional reservoir_release': if not in put it as false:
+            # optional reservoir_release': if not in put it as False
             if not('reservoir_release' in option):
                 option['reservoir_release'] = False
             if not(option['reservoir_lakes_Excel']) and option['reservoir_release']:
@@ -127,7 +128,6 @@ class reservoir(HydroModule):
                 self.var.ReservoirSitesCC = np.compress(self.var.ReservoirSitesC > 0, self.var.ReservoirSitesC)
                 self.var.ReservoirIndex = np.nonzero(self.var.ReservoirSitesC)[0]
 
-
             # check if no reservoir is in the mask map area => no reservoir function is used
             if self.var.ReservoirSitesCC.size == 0:
                 # break if no reservoirs
@@ -143,7 +143,8 @@ class reservoir(HydroModule):
             # Add reservoir locations to structures map (used to modify LddKinematic
             # and to calculate LddStructuresKinematic)
 
-            #ReservoirSitePcr = loadmap('ReservoirSites', pcr=True)
+            ReservoirSitePcr2 = loadmap('ReservoirSites', pcr=True)
+            # only load for pytest - no function
             ReservoirSitePcr = decompress(self.var.ReservoirSitesC)
             self.var.ReservoirSites = ReservoirSitePcr
             ReservoirSitePcr = ifthen((defined(ReservoirSitePcr) & boolean(decompress(self.var.IsChannel))), ReservoirSitePcr)
@@ -165,7 +166,6 @@ class reservoir(HydroModule):
                 self.var.ResAreaC = compressArray(ResAreaM2)
                 self.var.ResAreaCC = np.compress(self.var.ReservoirSitesC > 0, self.var.ResAreaC)
                 # Reservoir area [m2]
-
 
             ConservativeStorageLimit = lookupscalar(str(binding['TabConservativeStorageLimit']), ReservoirSitePcr)
             ConservativeStorageLimitC = compressArray(ConservativeStorageLimit)
@@ -226,7 +226,7 @@ class reservoir(HydroModule):
                         if int(self.var.waterbody_info[i][4]) > 0: self.var.reservoirTypeCC[resindex] = int(self.var.waterbody_info[i][4])
 
                         if float(self.var.waterbody_info[i][7]) > 0: self.var.NormalReservoirOutflowCC[resindex] = float(self.var.waterbody_info[i][7])
-                        # from Mio. m3 to m3 as rstor.txt is in m3
+                        # from Mio. m3 (in Excel) to m3 as rstor.txt is in m3
                         if float(self.var.waterbody_info[i][10]) > 0: self.var.TotalReservoirStorageM3CC[resindex] = float(self.var.waterbody_info[i][10]) * 1000000.
 
                         if float(self.var.waterbody_info[i][11]) > 0: self.var.ConservativeStorageLimitCC[resindex] = float(self.var.waterbody_info[i][11])

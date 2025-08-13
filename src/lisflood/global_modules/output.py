@@ -510,7 +510,7 @@ class outputTssMap(object):
             outpoints = binding[where]
             if where == "Catchments":
                 outpoints = decompress(outpoints)
-            # if some lakes, res, wtland where added with an Excel , then do not use the map but the changes sites
+            # if some lakes, res, wetland where added with an Excel, then do not use the map but the changes sites
             elif where == "LakeSites":
                 outpoints = decompress(self.var.LakeSitesC)
                 outpoints = ifthen(outpoints != 0, outpoints)

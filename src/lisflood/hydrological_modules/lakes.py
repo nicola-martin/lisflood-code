@@ -72,6 +72,8 @@ class lakes(HydroModule):
             if not('reservoir_lakes_Excel' in option):
                 option['reservoir_lakes_Excel'] = False
             if option['reservoir_lakes_Excel']:
+                # load location of Excel file from settingsflie
+                self.var.xl_settings_file_path = binding['Excel_settings_file']
                 # look into the Excel to find if there are new lakes  => waterbodyType = 5
                 self.var.LakeSitesC  = readwaterbody_Excel(self,self.var.xl_settings_file_path,self.var.LakeSitesC, 1,1)
                 self.var.LakeSitesCC = np.compress(self.var.LakeSitesC > 0, self.var.LakeSitesC)
@@ -86,6 +88,10 @@ class lakes(HydroModule):
                 settings.build_reportedmaps_dicts()
                 return
             # break if no lakes
+
+            # test if ther eis an openwaterevap -> if not generate a flag
+            if not('openwatereva_area' in option):
+                option['openwatereva_area'] = False
 
             self.var.IsStructureKinematic = np.where(self.var.LakeSitesC > 0, np.bool8(1), self.var.IsStructureKinematic)
             # Add lake locations to structures map (used to modify LddKinematic
@@ -113,7 +119,8 @@ class lakes(HydroModule):
                                  
             # Surface area of each lake [m2]
             LakeA = pcraster.lookupscalar(str(binding['TabLakeA']), LakeSitePcr)
-            LakeAC = compressArray(LakeA) * loadmap('LakeMultiplier')
+            LakeMult = loadmap('LakeMultiplier')
+            LakeAC = compressArray(LakeA) * LakeMult
             self.var.LakeACC = np.compress(self.var.LakeSitesC > 0, LakeAC)
             # Lake parameter A (suggested  value equal to outflow width in [m])
             # multiplied with the calibration parameter LakeMultiplier
@@ -135,10 +142,8 @@ class lakes(HydroModule):
                         if float(self.var.waterbody_info[i][9]) > 0:
                             mult = float(self.var.waterbody_info[i][9])
                         else:
-                            mult = loadmap('LakeMultiplier')
-                            if isinstance(mult, (list, np.ndarray)):
-                                mult = np.compress(self.var.LakeSitesC > 0, mult)
-                                mult = mult[lakeindex]
+                            mult = np.compress(self.var.LakeSitesCC > 0, maskone * LakeMult)
+                            mult = mult[lakeindex]
 
                         if float(self.var.waterbody_info[i][8]) > 0:
                             self.var.LakeACC[lakeindex]  = float(self.var.waterbody_info[i][8]) * mult

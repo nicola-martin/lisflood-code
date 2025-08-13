@@ -104,33 +104,31 @@ def valuecellNp(mask,coord, value):
     """
     Put in a value at the coordination location and return a 1D numpy array
     :param mask: Mask map
-    :param coord: coordination as lon,lat 9or x,y)
+    :param coord: coordinate as lon,lat (or x,y)
     :param value: Value to put in at coordination location
     :return: compressed numpy array
-    :return: appTrue=True if lake, res, wetland is inside mask
+    :return: appTrue=True if waterbody is inside mask
     """
 
     null = decompressNp(mask)
 
     col = int((coord[0] - pcraster.clone().west()) / pcraster.clone().cellSize())
     row = int((pcraster.clone().north() - coord[1]) / pcraster.clone().cellSize())
-    #if col >= 0 and row >= 0 and col < pcraster.clone().nrCols() and row < pcraster.clone().nrRows():
+
+    appTrue = False
     if col >= 0 and row >= 0 and col < pcraster.clone().nrCols() and row < pcraster.clone().nrRows():
         null[row, col] = value
         appTrue = True
-    else:
-        msg = "Coordinates: " + str(coord[0]) + ',' + str(coord[1]) \
-              + " in Excel file for lake/reservoir/wetland is outside mask map - col,row: " + str(col) + ',' + str(row)
-        warnings.warn(LisfloodWarning(msg))
-        appTrue = False
 
-    #map = numpy2pcr(Nominal, null, -9999)
     mapC = compressArray(null,pcr=False)
     if not(value in mapC):
         appTrue = False
+    if not(appTrue):
+        msg = "Coordinates: " + str(coord[0]) + ',' + str(coord[1]) \
+              + " in Excel file for lake/reservoir/wetland is outside mask map - col,row: " + str(col) + ',' + str(row)
+        warnings.warn(LisfloodWarning(msg))
+
     return mapC, appTrue
-
-
 
 
 def valuecell(mask, coordx, coordstr):
@@ -186,11 +184,10 @@ def waterbody_addinfo(xl_settings_file_path):
     dtypes =['int','bool','float','float','int','str','float','float','float','float','float','float','float','float','float','float','float','float','float']
     for col in list(df)[4:]:
         info =[]
-        # more complicated by sometimes excel mismatch dtypes
+        # more complicated because sometimes excel mismatch dtypes
         for var in range(19):
             v = np.array(df[col][var]).tolist()
             info.append(v)
-        #info = np.array([df[col][values] for values in range(19)])
         waterbody_info.append(info)
 
     return waterbody_info
@@ -199,7 +196,7 @@ def readwaterbody_Excel(self,xl_settings_file_path, waterbodySitesC, typemin,typ
     """
     read Excel file with additional reservoir, lake or wetland positions
     :param self: all variables of self
-    :param xl_settings_file_path: Excel file with additional reservoirs, lakes, wetlands as points
+    :param xl_settings_file_path: Excel file with additional waterbodies (reservoirs, lakes, wetlands) as points
     :param waterbodySitesC: waterbodies from netcdf
     :param typemin: water type used here -> from
     :param typemax: water type used here -> till

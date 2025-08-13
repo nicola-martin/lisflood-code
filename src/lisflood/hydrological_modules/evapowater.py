@@ -68,7 +68,7 @@ class evapowater(HydroModule):
             #if option['simulateReservoirs']:
             #    waterbody += self.var.ReservoirSitesC
 
-            # optional use evaporation directly from lakes by using the area of a lake
+            # optional use evaporation directly from waterbodies by using the area of a waterbody
             # otherwise it using the previous method
             if not('openwatereva_area' in option):
                 option['openwatereva_area'] = False
@@ -76,18 +76,19 @@ class evapowater(HydroModule):
                 waterbody += self.var.LakeSitesC
             if option['simulateReservoirs'] and option['openwatereva_area']:
                 waterbody += self.var.ReservoirSitesC
+            # if you use wetlands than you have to use openwatereva, because it is using variable area per day
             if option['simulateWetlands']:
                 waterbody += self.var.WetlandSitesC
             waterbody[waterbody>0] = 1
             waterbodyPcr = boolean(decompress(waterbody))
             # creating a subcatchment upstream of all waterbody points
             sub = subcatchment(self.var.LddStructuresKinematic,waterbodyPcr)
-            # load lake mask
             LakeMask = loadmap('LakeMask', pcr=True)
             # exclude all waterbody with are waterboy point and lakemask cells upstream of waterbody points
             # (those lakemask cells with are not unpstream, are kept for calculation
             evaMask = (boolean(sub) & boolean(LakeMask)) | boolean(waterbodyPcr)
             # invert and compress  => every cell who should be used has a 1 , all other = 0
+            # the mask is used to avoid double accounting of waterbodies for open water evapo
             self.var.evaMask = -(compressArray(evaMask)-1)
 
             #Using the previous method - substracting evaporation from fraction of water in a gridcell
@@ -100,7 +101,6 @@ class evapowater(HydroModule):
             self.var.downEva[lddC == 5] = maskinfo.info.mapC[0]
             self.var.maxNoEva = int(loadmap('maxNoEva'))
             # all pits gets a high number
-            # still to test if this works
 
 
     def dynamic(self):
@@ -112,13 +112,14 @@ class evapowater(HydroModule):
             # ***********************************************
             # *********  EVAPORATION FROM OPEN WATER  *******
             # ***********************************************
-            if  not ('openwatereva_area' in option):
-                # substract evaporation from potential water evapo x area of lake, reservoir, wetland
-                # this has to be used if you want to use changing area of wetlands
-
+            if  option['openwatereva_area']:
+                # for waterbodies  tjhe evaporation is substracted pot water evaporation x waterbody area
+                # for wetlands this option has to be used if you want to use changing area
+                # This calculates the evaporation from open water as a fraction of each gridcell
+                # but excludes waterbodies, because the are treated separately in lakes, reservoir, wetland modules.
                 UpstreamEva = self.var.EWRef * self.var.MMtoM3 * self.var.WaterFraction
                 # only for those where there is no reservoir, lake, wetland cell
-                # evaMask is calculate in initial and takes out all lakes, res., wetlands
+                # evaMask is taking out the cells with are upstream of waterbodies and are in
                 UpstreamEva = UpstreamEva * self.var.evaMask
                 # evaporation for loop is amount of water per timestep [cu m]
                 # Volume of potential evaporation from water surface  per time step (conversion to [m3])
@@ -130,6 +131,9 @@ class evapowater(HydroModule):
 
 
             else:
+                # This calculates the evaporation from open water as a fraction of each gridcell,
+                # also for waterbodies
+                # For waterbodies it is trying to collect water from upstream cells (default of maxNoEva=5)
                 UpstreamEva = self.var.EWRef * self.var.MMtoM3 * self.var.WaterFraction
                 # evaporation for loop is amount of water per timestep [cu m]
                 # Volume of potential evaporation from water surface  per time step (conversion to [m3])
