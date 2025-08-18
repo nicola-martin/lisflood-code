@@ -69,16 +69,17 @@ class evapowater(HydroModule):
             #    waterbody += self.var.ReservoirSitesC
 
             # optional use evaporation directly from waterbodies by using the area of a waterbody
-            # otherwise it using the previous method
-            if not('openwatereva_area' in option):
-                option['openwatereva_area'] = False
-            if option['simulateLakes'] and option['openwatereva_area']:
-                waterbody += self.var.LakeSitesC
-            if option['simulateReservoirs'] and option['openwatereva_area']:
-                waterbody += self.var.ReservoirSitesC
-            # if you use wetlands than you have to use openwatereva, because it is using variable area per day
-            if option['simulateWetlands']:
-                waterbody += self.var.WetlandSitesC
+            # otherwise it using the previous method (or if InitLisflood is used)
+            if not(option['InitLisflood']):
+                if not('openwatereva_area' in option):
+                    option['openwatereva_area'] = False
+                if option['simulateLakes'] and option['openwatereva_area']:
+                    waterbody += self.var.LakeSitesC
+                if option['simulateReservoirs'] and option['openwatereva_area']:
+                    waterbody += self.var.ReservoirSitesC
+                # if you use wetlands than you have to use openwatereva, because it is using variable area per day
+                if option['simulateWetlands']:
+                    waterbody += self.var.WetlandSitesC
             waterbody[waterbody>0] = 1
             waterbodyPcr = boolean(decompress(waterbody))
             # creating a subcatchment upstream of all waterbody points
@@ -112,7 +113,7 @@ class evapowater(HydroModule):
             # ***********************************************
             # *********  EVAPORATION FROM OPEN WATER  *******
             # ***********************************************
-            if  option['openwatereva_area']:
+            if  option['openwatereva_area'] and not option['InitLisflood']:
                 # for waterbodies  tjhe evaporation is substracted pot water evaporation x waterbody area
                 # for wetlands this option has to be used if you want to use changing area
                 # This calculates the evaporation from open water as a fraction of each gridcell
