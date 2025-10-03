@@ -510,12 +510,23 @@ class outputTssMap(object):
             outpoints = binding[where]
             if where == "Catchments":
                 outpoints = decompress(outpoints)
+            # if some lakes, res, wetland where added with an Excel, then do not use the map but the changes sites
+            elif where == "LakeSites":
+                outpoints = decompress(self.var.LakeSitesC)
+                outpoints = ifthen(outpoints != 0, outpoints)
+            elif where == "ReservoirSites":
+                outpoints = decompress(self.var.ReservoirSitesC)
+                outpoints = ifthen(outpoints != 0, outpoints)
+            elif where == "WetlandSites":
+                outpoints = decompress(self.var.WetlandSitesC)
+                outpoints = ifthen(outpoints != 0, outpoints)
             else:
                 coord = binding[where].split()  # could be gauges, sites, lakeSites etc.
                 if len(coord) % 2 == 0:
                     outpoints = valuecell(self.var.MaskMap, coord, outpoints)
                 else:
                     try:
+
                         outpoints = loadmap(where, pcr=True)
                         outpoints = ifthen(outpoints != 0, outpoints)
                         # this is necessary if netcdf maps are loaded !! otherwise strange dis.tss

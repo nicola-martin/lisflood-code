@@ -102,6 +102,10 @@ class indicatorcalc(HydroModule):
 
             if option['openwaterevapo']: 
                 self.var.MonthETactMM += self.var.EvaAddM3 * self.var.M3toMM 
+            if option['simulateLakes']:
+                self.var.MonthETactMM += self.var.evaLakesM3 * self.var.M3toMM
+            if option['simulateWetlands']:
+                self.var.MonthETactMM += self.var.evaWetlandM3 * self.var.M3toMM
 
             self.var.MonthETdifMM = np.maximum((self.var.MonthETpotMM - self.var.MonthETactMM)*self.var.LandUseMask, maskinfo.in_zero())  
             # ; land use mask can be used to mask out deserts and high mountains, where no agriculture is possible            

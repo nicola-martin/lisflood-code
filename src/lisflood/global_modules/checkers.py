@@ -28,7 +28,7 @@ from .errors import LisfloodError, LisfloodWarning
 from .add1 import loadmap, loadsetclone, compressArray
 from ..hydrological_modules import HydroModule
 from ..hydrological_modules import (surface_routing, evapowater, snow, routing, leafarea, inflow, waterlevel,
-                                    waterbalance, wateruse, waterabstraction, lakes, riceirrigation, indicatorcalc,
+                                    waterbalance, wateruse, waterabstraction, lakes, wetlands, riceirrigation, indicatorcalc,
                                     landusechange, frost, groundwater, miscInitial, soilloop, soil,
                                     reservoir, transmission)
 
@@ -72,6 +72,7 @@ class ModulesInputs:
         'varfractionwater': [evapowater],
         'TransientLandUseChange': [landusechange, indicatorcalc, waterabstraction],
         'simulateLakes': [lakes, indicatorcalc, routing, waterabstraction, waterbalance],
+        'simulateWetlands': [wetlands, indicatorcalc, routing, waterabstraction, waterbalance],
         'simulateReservoirs': [reservoir, indicatorcalc, routing, waterabstraction, waterbalance],
         'simulatePF': [soilloop, soil],
         'simulateWaterLevels': [waterlevel],

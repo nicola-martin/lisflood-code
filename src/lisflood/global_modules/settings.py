@@ -66,7 +66,8 @@ class Singleton(type):
             new_init_args = []
             for a in init_args:
                 if isinstance(a[1], np.ndarray):
-                    new_init_args.append((a[0], a[1].tostring()))
+                    #new_init_args.append((a[0], a[1].tostring()))
+                    new_init_args.append((a[0], a[1].tobytes()))
                 else:
                     new_init_args.append(a)
             key = (cls, frozenset(new_init_args))

@@ -81,6 +81,14 @@ def lisfloodexe(lissettings=None):
     # read the settingsfile with all information about the catchments(s)
     # and the choosen option for mdelling and output
 
+    # Include Modflow libraries flopy and xmipy. add option False if not exist in settinsg
+    if not ('groundwater_ModFlow' in option):
+        option['groundwater_ModFlow'] = False
+    if option["groundwater_ModFlow"]:
+        import flopy
+        import xmipy
+
+
     # remove steps from ReportSteps that are not included in simulation period
     for key in report_steps:
         report_steps[key] = [x for x in report_steps[key] if model_steps[0] <= x <= model_steps[1]]
