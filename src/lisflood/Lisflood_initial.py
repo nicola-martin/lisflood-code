@@ -49,6 +49,7 @@ from .hydrological_modules.groundwater import groundwater
 from .hydrological_modules.surface_routing import surface_routing
 from .hydrological_modules.reservoir import reservoir
 from .hydrological_modules.lakes import lakes
+from .hydrological_modules.wetlands import wetlands
 from .hydrological_modules.polder import polder
 from .hydrological_modules.waterabstraction import waterabstraction
 from .hydrological_modules.indicatorcalc import indicatorcalc
@@ -60,6 +61,7 @@ from .hydrological_modules.opensealed import opensealed
 from .hydrological_modules.waterbalance import waterbalance
 from .hydrological_modules.waterlevel import waterlevel
 from .hydrological_modules.structures import structures
+from .hydrological_modules.transient import groundwater_modflow
 
 from .global_modules.output import outputTssMap
 from .global_modules.stateVar import stateVar
@@ -138,6 +140,7 @@ class LisfloodModel_ini(DynamicModel):
         self.surface_routing_module = surface_routing(self)
         self.reservoir_module = reservoir(self)
         self.lakes_module = lakes(self)
+        self.wetlands_module = wetlands(self)
         self.polder_module = polder(self)
         self.waterabstraction_module = waterabstraction(self)
         self.indicatorcalc_module = indicatorcalc(self)
@@ -151,6 +154,7 @@ class LisfloodModel_ini(DynamicModel):
         self.waterbalance_module = waterbalance(self)
         self.waterlevel_module = waterlevel(self)
         self.structures_module = structures(self)
+        self.groundwater_modflow_module = groundwater_modflow(self)
 
         self.prescribed_vegetation = self.epic_settings.prescribed_vegetation
         self.interactive_vegetation = []
@@ -184,7 +188,6 @@ class LisfloodModel_ini(DynamicModel):
 
         # run intial misc to get all global variables
         self.misc_module.initial()
-
         self.landusechange_module.initial()
 
         self.snow_module.initial()
@@ -196,6 +199,9 @@ class LisfloodModel_ini(DynamicModel):
         self.routing_module.initial()
 
         self.groundwater_module.initial()
+        if option.get('groundwater_ModFlow'):
+            self.groundwater_modflow_module.initial()
+
         self.waterlevel_module.initial()
 
         self.inflow_module.initial()
@@ -203,6 +209,7 @@ class LisfloodModel_ini(DynamicModel):
 
         self.reservoir_module.initial()
         self.lakes_module.initial()
+        self.wetlands_module.initial()
         self.polder_module.initial()
 
         self.transmission_module.initial()

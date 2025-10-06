@@ -22,6 +22,7 @@ from pcraster import lddmask, accuflux, boolean, downstream, pit, path, lddrepai
 import numpy as np
 
 from .lakes import lakes
+from .wetlands import wetlands
 from .reservoir import reservoir
 from .polder import polder
 from .inflow import inflow
@@ -51,6 +52,7 @@ class routing(HydroModule):
         self.var = routing_variable
 
         self.lakes_module = lakes(self.var)
+        self.wetlands_module = wetlands(self.var)
         self.reservoir_module = reservoir(self.var)
         self.polder_module = polder(self.var)
         self.inflow_module = inflow(self.var)
@@ -112,7 +114,7 @@ class routing(HydroModule):
         # (identical to IsChannel, unless dynamic wave is used, see below)
         self.var.IsStructureKinematic = np.bool8(maskinfo.in_zero())
 
-        # Map that identifies special inflow/outflow structures (reservoirs, lakes) within the
+        # Map that identifies special inflow/outflow structures (reservoirs, lakes, wetlands) within the
         # kinematic wave channel routing. Set to (dummy) value of zero modified in reservoir and lake
         # routines (if those are used)
         LddChan = lddmask(self.var.Ldd, self.var.IsChannelPcr)
@@ -407,8 +409,10 @@ class routing(HydroModule):
             self.var.DischargeM3StructuresIni = maskinfo.in_zero()     
             if option['simulateReservoirs']:             
                self.var.StorageStepINIT += self.var.ReservoirStorageIniM3  
-            if option['simulateLakes']:  
-               self.var.StorageStepINIT += self.var.LakeStorageIniM3 
+            if option['simulateLakes']:
+               self.var.StorageStepINIT += self.var.LakeStorageIniM3
+            if option['simulateWetlands']:
+               self.var.StorageStepINIT += self.var.WetlandStorageIniM3                
             self.var.StorageStepINIT = np.take(np.bincount(self.var.Catchments, weights=self.var.StorageStepINIT), self.var.Catchments) 
                 
         if not option['InitLisflood'] and option['repMBTs']:  
@@ -421,6 +425,9 @@ class routing(HydroModule):
             if option['simulateLakes']:  
                self.var.StorageStepINIT += self.var.LakeStorageIniM3 
                DisStructure += np.where(compressArray(self.var.IsUpsOfStructureLake), 0.5 * self.var.ChanQ * self.var.DtRouting, 0) 
+            if option['simulateWetlands']:  
+               self.var.StorageStepINIT += self.var.WetlandStorageIniM3 
+               DisStructure += np.where(compressArray(self.var.IsUpsOfStructureWetland), 0.5 * self.var.ChanQ * self.var.DtRouting, 0)
             self.var.DischargeM3StructuresIni = np.take(np.bincount(self.var.Catchments, weights=DisStructure), self.var.Catchments)      
            else:                             
             self.var.StorageStepINIT= self.var.ChanM3Kin+self.var.Chan2M3Kin-self.var.Chan2M3Start                       
@@ -428,6 +435,8 @@ class routing(HydroModule):
                self.var.StorageStepINIT += self.var.ReservoirStorageIniM3
             if option['simulateLakes']:   
                self.var.StorageStepINIT += self.var.LakeStorageIniM3
+            if option['simulateWetlands']:   
+               self.var.StorageStepINIT += self.var.WetlandStorageIniM3
             self.var.StorageStepINIT = np.take(np.bincount(self.var.Catchments, weights=self.var.StorageStepINIT), self.var.Catchments)    
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
@@ -440,10 +449,11 @@ class routing(HydroModule):
 
         if not(option['InitLisflood']):    # only with no InitLisflood
             self.lakes_module.dynamic_inloop(NoRoutingExecuted)
+            self.wetlands_module.dynamic_inloop(NoRoutingExecuted)
             self.reservoir_module.dynamic_inloop(NoRoutingExecuted)
             self.polder_module.dynamic_inloop()
 
-        # End only with no Lisflood (no reservoirs, lakes and polder with
+        # End only with no Lisflood (no reservoirs, lakes, wetlands and polder with
         # initLisflood)
 
         self.inflow_module.dynamic_inloop(NoRoutingExecuted)
@@ -471,7 +481,9 @@ class routing(HydroModule):
                 SideflowChanM3 -= self.var.TransLossM3Dt
             if not(option['InitLisflood']):    # only with no InitLisflood
                 if option['simulateLakes']:
-                    SideflowChanM3 += self.var.QLakeOutM3Dt                  
+                    SideflowChanM3 += self.var.QLakeOutM3Dt
+                if option['simulateWetlands']:
+                    SideflowChanM3 += self.var.QWetlandOutM3Dt
                 if option['simulateReservoirs']:
                     SideflowChanM3 += self.var.QResOutM3Dt                   
                 if option['simulatePolders']:
@@ -677,8 +689,21 @@ class routing(HydroModule):
                      DischargeM3Lake = np.take(np.bincount(self.var.Catchments, weights=DisLake),self.var.Catchments)
                      DischargeM3StructuresR += DischargeM3Lake
 
-                     DischargeM3StructuresR -= self.var.DischargeM3StructuresIni                    
-                                        
+                     DischargeM3StructuresR -= self.var.DischargeM3StructuresIni
+
+                  if option['simulateWetlands']:
+                     sum1 = self.var.ChanQ.copy()
+                     StorageStep = StorageStep + self.var.WetlandStorageM3Balance.copy()
+                     DisStructureSR = np.where(self.var.IsUpsOfStructureKinematicC, sum1 * self.var.DtRouting, 0)
+                     DischargeM3StructuresR = np.take(np.bincount(self.var.Catchments, weights=DisStructureSR), self.var.Catchments)
+                     DisWetland = maskinfo.in_zero()
+                     np.put(DisWetland, self.var.WetlandIndex, 0.5 * self.var.WetlandInflowCC * self.var.DtRouting)
+                     DischargeM3Wetland = np.take(np.bincount(self.var.Catchments, weights=DisWetland), self.var.Catchments)
+                     DischargeM3StructuresR += DischargeM3Wetland
+
+                     DischargeM3StructuresR -= self.var.DischargeM3StructuresIni
+
+
                   # Mass Balance Error due to the Split Routing module
                   StorageStep1=np.take(np.bincount(self.var.Catchments, weights=StorageStep), self.var.Catchments)
                   

@@ -20,6 +20,7 @@ import cftime
 from future.utils import listitems
 
 from nine import range
+import importlib
 
 import uuid
 import warnings
@@ -99,6 +100,37 @@ def readInputWithBackup(name, values_if_failure=None):
             return name
 
 
+def valuecellNp(mask,coord, value):
+    """
+    Put in a value at the coordination location and return a 1D numpy array
+    :param mask: Mask map
+    :param coord: coordinate as lon,lat (or x,y)
+    :param value: Value to put in at coordination location
+    :return: compressed numpy array
+    :return: appTrue=True if waterbody is inside mask
+    """
+
+    null = decompressNp(mask)
+
+    col = int((coord[0] - pcraster.clone().west()) / pcraster.clone().cellSize())
+    row = int((pcraster.clone().north() - coord[1]) / pcraster.clone().cellSize())
+
+    appTrue = False
+    if col >= 0 and row >= 0 and col < pcraster.clone().nrCols() and row < pcraster.clone().nrRows():
+        null[row, col] = value
+        appTrue = True
+
+    mapC = compressArray(null,pcr=False)
+    if not(value in mapC):
+        appTrue = False
+    if not(appTrue):
+        msg = "Coordinates: " + str(coord[0]) + ',' + str(coord[1]) \
+              + " in Excel file for lake/reservoir/wetland is outside mask map - col,row: " + str(col) + ',' + str(row)
+        warnings.warn(LisfloodWarning(msg))
+
+    return mapC, appTrue
+
+
 def valuecell(mask, coordx, coordstr):
     """
     to put a value into a pcraster map -> invert of cellvalue
@@ -130,6 +162,82 @@ def valuecell(mask, coordx, coordstr):
 
     map = numpy2pcr(Nominal, null, -9999)
     return map
+
+def waterbody_addinfo(xl_settings_file_path):
+    """
+    Read waterbody location from Excel
+    :param xl_settings_file_path: Excel file with waterbodies in sheet "Reservoirs"
+    :return: array with information on new waterbodies
+
+    """
+    pd = importlib.import_module("pandas", package=None)
+    try:
+        df = pd.read_excel(xl_settings_file_path, header=None, sheet_name='Reservoirs')
+    except:
+        msg = "Either the Excel file: {} does not exists or it does not have the sheet: Reservoirs\n".format(xl_settings_file_path)
+        raise LisfloodError(msg)
+
+    # reservoir_transfers = [ [Giving reservoir, Receiving reservoir, [366-day array of releases]] ]
+    waterbody_info = []
+    #         0      1      2        3       4    5     6      7        8       9       10     11      12      13      14      15       16     17       18
+    #          ID    New    lat     lon    type  name  area   normal  lakea    lmult   vol     rclim   rnlim  rflim    rminq   resmult rndq     adjust maxlevel
+    dtypes =['int','bool','float','float','int','str','float','float','float','float','float','float','float','float','float','float','float','float','float']
+    for col in list(df)[4:]:
+        info =[]
+        # more complicated because sometimes excel mismatch dtypes
+        for var in range(19):
+            v = np.array(df[col][var]).tolist()
+            info.append(v)
+        waterbody_info.append(info)
+
+    return waterbody_info
+
+def readwaterbody_Excel(self,xl_settings_file_path, waterbodySitesC, typemin,typemax):
+    """
+    read Excel file with additional reservoir, lake or wetland positions
+    :param self: all variables of self
+    :param xl_settings_file_path: Excel file with additional waterbodies (reservoirs, lakes, wetlands) as points
+    :param waterbodySitesC: waterbodies from netcdf
+    :param typemin: water type used here -> from
+    :param typemax: water type used here -> till
+    :return: Waterbodies from netcdf + new ones from excel
+    """
+
+    # look into the Excel to find if there are new waterbodies
+    self.var.waterbody_info = waterbody_addinfo(xl_settings_file_path)
+
+    waterbody_newC = waterbodySitesC * 0
+    waterbody_newC1 = []
+
+    for i in range(len(self.var.waterbody_info)):
+
+        # if watertype is a reservoir (type =2 or 3)
+        if (self.var.waterbody_info[i][4] >= typemin) & (self.var.waterbody_info[i][4] <= typemax):
+
+            # if a new reservoir should be put in
+            if self.var.waterbody_info[i][1]:
+                # create new reservoir/lake
+                coord = [float(self.var.waterbody_info[i][3]), float(self.var.waterbody_info[i][2])]
+                waterbody_newC,appTrue = valuecellNp(waterbody_newC, coord, int(self.var.waterbody_info[i][0]))
+
+
+                if appTrue:
+                    waterbody_newC1.append(int(self.var.waterbody_info[i][0]))
+
+    # if  a new reservoir is in the Excel
+    if len(waterbody_newC1) > 0:
+
+        # check if lake/res already exists
+        index = np.where(waterbody_newC > 0)[0]
+        for i in index:
+            if waterbodySitesC[i] > 0:
+                no = waterbody_newC[i]
+                msg = "New reservoir No: " + str(waterbody_newC[i]) + \
+                      " is at the place of an existing one No: " + str(waterbodySitesC[i]) + "\n"
+                raise LisfloodError(msg)
+        waterbodySitesC = np.where(waterbodySitesC == 0, waterbody_newC, waterbodySitesC)
+
+    return waterbodySitesC
 
 
 def mapattrNetCDF(name):
@@ -303,6 +411,20 @@ def decompress(map):
         dmap[dmap.mask] = -9999
         map = numpy2pcr(Scalar, dmap, -9999)
     return map
+
+
+def decompressNp(map):
+    maskinfo = MaskInfo.instance()
+    dmap = maskinfo.info.maskall.copy()
+    dmap[~maskinfo.info.maskflat] = map[:]
+    dmap = dmap.reshape(maskinfo.info.shape)
+    # check if integer map (like outlets, lakes etc)
+    try:
+        checkint = str(map.dtype)
+    except:
+        checkint = None
+
+    return dmap
 
 
 def makenumpy(map):

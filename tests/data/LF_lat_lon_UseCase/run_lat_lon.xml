@@ -172,7 +172,7 @@ The option "numCPUs_parallelNumba" may take the following values:
                     Date of first time step in simulation
                 </comment>
             </textvar>
-            <textvar name="StepEnd" value="01/01/2018 00:00"/>
+            <textvar name="StepEnd" value="05/01/1986 00:00"/>
 
             <textvar name="ReportSteps" value="99999">
                 <comment>
