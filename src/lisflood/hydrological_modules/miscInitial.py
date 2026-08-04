@@ -139,6 +139,8 @@ class miscInitial(HydroModule):
         # date of the first possible model run
         # computation of model steps is referred to CalendarStartDay
         self.var.CalendarDayStart = calendar(binding['CalendarDayStart'], binding['calendar_type'])
+        # date of the first model step
+        self.var.CalendarDay = calendar(binding['StepStart'], binding['calendar_type'])
         self.var.PrScaling = loadmap('PrScaling')
         self.var.CalEvaporation = loadmap('CalEvaporation')
 
