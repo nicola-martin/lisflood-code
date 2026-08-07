@@ -175,7 +175,7 @@ class wetlands(HydroModule):
             if option['reservoir_lakes_Excel']:
                 # if wetlands are stored in Excel file
                 self.var.wetland_area = self.wetland_readarea(self.var.xl_settings_file_path)
-                doy = self.var.CalendarDay.timetuple().tm_yday
+                doy = self.var.StartDate.timetuple().tm_yday
                 self.var.WetlandAreaCC = self.var.wetland_area[doy-1,:] * 1000000
                 # back to wetlandArea , because it is used in routing_kinematic
                 self.var.wetlandArea = maskinfo.in_zero()
@@ -221,7 +221,7 @@ class wetlands(HydroModule):
                 self.var.WetlandLevelCC = np.compress(self.var.WetlandSitesC > 0, WetlandInitialLevelValue)
 
                 # use the day before to calculate the storage of the previous day
-                daybefore = (self.var.CalendarDay - datetime.timedelta(days=1)).timetuple().tm_yday
+                daybefore = (self.var.StartDate - datetime.timedelta(days=1)).timetuple().tm_yday
                 WetlandAreaCC1 = self.var.wetland_area[daybefore-1, :] * 1000000  # day before
                 WetlandAreaCC2 = self.var.wetland_area[doy-1      , :] * 1000000  # today
                 # last sub timestep of the routing to calculate last wetlandarea exactly
@@ -344,7 +344,8 @@ class wetlands(HydroModule):
 
             if NoRoutingExecuted==0:
                 self.var.WetlandAreaCC1 = self.var.wetland_area[self.var.CalendarDay - 1, :] * 1000000  # today
-                self.var.WetlandAreaCC2 = self.var.wetland_area[self.var.CalendarDay    , :] * 1000000  # tomorrow
+                dayafter = (self.var.CalendarDate + datetime.timedelta(days=1)).timetuple().tm_yday
+                self.var.WetlandAreaCC2 = self.var.wetland_area[dayafter-1 , :] * 1000000  # tomorrow
                 np.put(self.var.wetlandArea, self.var.WetlandIndex, self.var.WetlandAreaCC1)
 
                 self.var.WetlandStorageM3CC=np.compress(self.var.WetlandSitesC > 0, self.var.WetlandStorageM3)
