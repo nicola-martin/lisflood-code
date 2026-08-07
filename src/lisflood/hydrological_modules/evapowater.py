@@ -70,9 +70,9 @@ class evapowater(HydroModule):
 
             # optional use evaporation directly from waterbodies by using the area of a waterbody
             # otherwise it using the previous method (or if InitLisflood is used)
+            if not('openwatereva_area' in option):
+                option['openwatereva_area'] = False
             if not(option['InitLisflood']):
-                if not('openwatereva_area' in option):
-                    option['openwatereva_area'] = False
                 if option['simulateLakes'] and option['openwatereva_area']:
                     waterbody += self.var.LakeSitesC
                 if option['simulateReservoirs'] and option['openwatereva_area']:
