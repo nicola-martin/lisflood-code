@@ -599,8 +599,11 @@ class routing(HydroModule):
                 self.var.Chan2M3Kin = np.where(diffM3 < 0.0, self.var.Chan2M3Start, self.var.Chan2M3Kin)
                 # Check for negative volume in second line of routing at the end of routing substep
 
-                self.var.CrossSection2Area = (self.var.Chan2M3Kin - self.var.Chan2M3Start) * self.var.InvChanLength   
-                # Compute cross-section for second line of routing
+                self.var.CrossSection2Area = np.where(
+                    self.var.ChanLength > 0,
+                    (self.var.Chan2M3Kin - self.var.Chan2M3Start) * self.var.InvChanLength,
+                    0.0)
+                # Compute cross-section for second line of routing (guard against NaN when ChanLength=0)
                 
                 self.var.Chan2QKin = (self.var.Chan2M3Kin * self.var.InvChanLength * self.var.InvChannelAlpha2) ** (self.var.InvBeta)
                 # Correct negative discharge at the end of computation step in second line

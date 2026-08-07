@@ -383,10 +383,12 @@ def compressArray(map, pcr=True, name=None):
     mapC = np.ma.compressed(mapnp1)
 
     if name is not None:
-        if np.max(np.isnan(mapC)):
+        nan_mask = np.isnan(mapC)
+        if np.any(nan_mask):
             msg = name + " has less valid pixels than area or ldd \n"
-            raise LisfloodError(msg)
-            # test if map has less valid pixel than area.map (or ldd)
+            warnings.warn(LisfloodWarning(msg))
+            mapC[nan_mask] = 0.0
+            # test if map has less valid pixel than area.map (or ldd): replace NaN with 0 to allow warm start
     return mapC.astype(float)
 
 
